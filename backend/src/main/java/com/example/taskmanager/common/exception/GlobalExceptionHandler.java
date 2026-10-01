@@ -2,6 +2,7 @@ package com.example.taskmanager.common.exception;
 
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.core.PropertyReferenceException;
@@ -15,6 +16,8 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.validation.method.ParameterErrors;
+import org.springframework.validation.method.ParameterValidationResult;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
@@ -80,17 +83,18 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
       HttpStatusCode status,
       WebRequest request) {
     List<Map<String, String>> fieldErrors =
-        ex.getParameterValidationResults().stream()
-            .flatMap(
-                result ->
-                    result.getResolvableErrors().stream()
-                        .map(
-                            error ->
-                                fieldError(
-                                    result.getMethodParameter().getParameterName(),
-                                    error.getDefaultMessage())))
-            .toList();
+        ex.getParameterValidationResults().stream().flatMap(this::toFieldErrors).toList();
     return ResponseEntity.badRequest().body(validationProblem(fieldErrors));
+  }
+
+  private Stream<Map<String, String>> toFieldErrors(ParameterValidationResult result) {
+    if (result instanceof ParameterErrors errors) {
+      return errors.getFieldErrors().stream()
+          .map(error -> fieldError(error.getField(), error.getDefaultMessage()));
+    }
+    String parameterName = result.getMethodParameter().getParameterName();
+    return result.getResolvableErrors().stream()
+        .map(error -> fieldError(parameterName, error.getDefaultMessage()));
   }
 
   private static Map<String, String> fieldError(String field, String message) {
