@@ -1,9 +1,13 @@
 package com.example.taskmanager.common.exception;
 
+import java.sql.SQLException;
+import java.sql.SQLTransientConnectionException;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 import lombok.extern.slf4j.Slf4j;
+import org.hibernate.TransactionException;
+import org.springframework.core.NestedExceptionUtils;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.core.PropertyReferenceException;
 import org.springframework.http.HttpHeaders;
@@ -12,6 +16,7 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -25,6 +30,9 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
+
+  private static final String SQL_STATE_CONNECTION_EXCEPTION = "08";
+  private static final String SQL_STATE_SERVER_SHUTDOWN = "57P";
 
   @ExceptionHandler(ApiException.class)
   public ProblemDetail handleApiException(ApiException ex) {
@@ -58,9 +66,38 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
   @ExceptionHandler(Exception.class)
   public ProblemDetail handleUnexpected(Exception ex) {
+    if (isDatabaseUnavailable(ex)) {
+      log.error("Database unavailable: {}", NestedExceptionUtils.getMostSpecificCause(ex).getMessage());
+      return ProblemDetail.forStatusAndDetail(
+          HttpStatus.SERVICE_UNAVAILABLE, "The database is unavailable, please try again shortly");
+    }
     log.error("Unhandled exception", ex);
     return ProblemDetail.forStatusAndDetail(
         HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred");
+  }
+
+  static boolean isDatabaseUnavailable(Throwable ex) {
+    for (Throwable cause = ex; cause != null; cause = cause.getCause()) {
+      if (cause instanceof CannotCreateTransactionException
+          || cause instanceof SQLTransientConnectionException
+          || isTransactionLostWithConnection(cause)) {
+        return true;
+      }
+      if (cause instanceof SQLException sql && isConnectionFailureState(sql.getSQLState())) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private static boolean isTransactionLostWithConnection(Throwable cause) {
+    return cause instanceof TransactionException && cause.getCause() instanceof SQLException;
+  }
+
+  private static boolean isConnectionFailureState(String sqlState) {
+    return sqlState != null
+        && (sqlState.startsWith(SQL_STATE_CONNECTION_EXCEPTION)
+            || sqlState.startsWith(SQL_STATE_SERVER_SHUTDOWN));
   }
 
   @Override

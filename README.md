@@ -49,8 +49,9 @@ cd frontend && npm run lint    # oxlint
 | POST | `/api/users` | Create a user; 409 on duplicate email |
 
 Errors use RFC 9457 `application/problem+json` (`status`, `title`, `detail`, `instance`); validation
-failures add `errors: [{ "field", "message" }]`. Unexpected errors return a generic 500 message and
-are logged server-side.
+failures add `errors: [{ "field", "message" }]`. If PostgreSQL is unreachable the API answers
+`503 The database is unavailable` within 5 s (`DB_CONNECTION_TIMEOUT_MS`) and recovers on its own
+once the database is back. Other unexpected errors return a generic 500 and are logged server-side.
 
 ## Design notes
 

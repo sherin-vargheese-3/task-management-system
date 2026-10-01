@@ -23,8 +23,10 @@ import com.example.taskmanager.task.dto.AssigneeResponse;
 import com.example.taskmanager.task.dto.TaskCreateRequest;
 import com.example.taskmanager.task.dto.TaskResponse;
 import com.example.taskmanager.task.dto.TaskSummaryResponse;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.util.List;
+import org.hibernate.TransactionException;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,8 +34,10 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.MediaType;
+import org.springframework.orm.jpa.JpaSystemException;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.CannotCreateTransactionException;
 
 @WebMvcTest(TaskController.class)
 class TaskControllerTest {
@@ -211,6 +215,43 @@ class TaskControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total").value(6))
         .andExpect(jsonPath("$.inProgress").value(2));
+  }
+
+  @Test
+  void databaseOutageReturns503WithClearMessage() throws Exception {
+    when(taskService.summary())
+        .thenThrow(new CannotCreateTransactionException("Could not open JPA EntityManager"));
+
+    mockMvc
+        .perform(get("/api/tasks/summary"))
+        .andExpect(status().isServiceUnavailable())
+        .andExpect(
+            jsonPath("$.detail").value("The database is unavailable, please try again shortly"));
+  }
+
+  @Test
+  void connectionDroppedMidQueryReturns503() throws Exception {
+    SQLException adminShutdown =
+        new SQLException("FATAL: terminating connection due to administrator command", "57P01");
+    when(taskService.summary())
+        .thenThrow(new JpaSystemException(new RuntimeException("JDBC exception", adminShutdown)));
+
+    mockMvc
+        .perform(get("/api/tasks/summary"))
+        .andExpect(status().isServiceUnavailable())
+        .andExpect(
+            jsonPath("$.detail").value("The database is unavailable, please try again shortly"));
+  }
+
+  @Test
+  void rollbackOnClosedConnectionReturns503() throws Exception {
+    TransactionException rollbackFailure =
+        new TransactionException(
+            "Unable to rollback against JDBC Connection", new SQLException("Connection is closed"));
+    when(taskService.summary())
+        .thenThrow(new JpaSystemException(new RuntimeException("rollback failed", rollbackFailure)));
+
+    mockMvc.perform(get("/api/tasks/summary")).andExpect(status().isServiceUnavailable());
   }
 
   @Test
