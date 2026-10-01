@@ -131,4 +131,12 @@ describe('TaskDetailsPage', () => {
 
     expect(tasksApi.remove).not.toHaveBeenCalled()
   })
+
+  it('tells the user when the assignee list cannot be loaded', async () => {
+    vi.mocked(usersApi.list).mockRejectedValue(new ApiError(0, 'Unable to reach the server'))
+
+    renderDetails()
+
+    expect(await screen.findByText('Could not load users: Unable to reach the server')).toBeInTheDocument()
+  })
 })

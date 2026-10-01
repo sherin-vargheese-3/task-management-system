@@ -29,7 +29,7 @@ export function TaskDetailsPage() {
 
 function TaskDetails({ taskId }: { taskId: number }) {
   const navigate = useNavigate()
-  const { users } = useUsers()
+  const { users, error: usersError } = useUsers()
   const fetchTask = useCallback((signal: AbortSignal) => tasksApi.get(taskId, signal), [taskId])
   const { data: task, loading, error, reload, setData } = useApi(fetchTask)
   const [editing, setEditing] = useState(false)
@@ -115,6 +115,7 @@ function TaskDetails({ taskId }: { taskId: number }) {
           </header>
 
           {actionError && <ErrorMessage error={actionError} />}
+          {usersError && <ErrorMessage error={`Could not load users: ${usersError.message}`} />}
 
           <p className="description">{task.description || <span className="muted">No description</span>}</p>
 

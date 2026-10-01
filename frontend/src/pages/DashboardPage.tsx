@@ -17,7 +17,7 @@ export const SEARCH_DEBOUNCE_MS = 300
 export function DashboardPage() {
   const { filters, page, setFilters, setPage } = useTaskQuery()
   const debouncedSearch = useDebouncedValue(filters.search, SEARCH_DEBOUNCE_MS)
-  const { users } = useUsers()
+  const { users, error: usersError } = useUsers()
   const [busyTaskId, setBusyTaskId] = useState<number | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
 
@@ -74,6 +74,7 @@ export function DashboardPage() {
         <Loading label="Loading summary…" />
       )}
 
+      {usersError && <ErrorMessage error={`Could not load users: ${usersError.message}`} />}
       <TaskFilters filters={filters} users={users} onChange={setFilters} />
 
       {actionError && <ErrorMessage error={actionError} />}

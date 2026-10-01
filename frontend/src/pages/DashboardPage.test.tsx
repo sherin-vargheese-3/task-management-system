@@ -120,4 +120,13 @@ describe('DashboardPage', () => {
 
     expect(await screen.findByText('Task 1 is already completed')).toBeInTheDocument()
   })
+
+  it('tells the user when the assignee list cannot be loaded', async () => {
+    vi.mocked(usersApi.list).mockRejectedValue(new ApiError(500, 'An unexpected error occurred'))
+
+    renderDashboard()
+
+    expect(await screen.findByText('Could not load users: An unexpected error occurred')).toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: 'Write docs' })).toBeInTheDocument()
+  })
 })
