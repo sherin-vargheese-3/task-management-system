@@ -6,12 +6,13 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': 'http://localhost:8080',
+      '/api': process.env.API_PROXY_TARGET ?? 'http://localhost:8080',
     },
   },
   test: {
     environment: 'jsdom',
     globals: true,
     setupFiles: './src/test/setup.ts',
+    clearMocks: true,
   },
 })
